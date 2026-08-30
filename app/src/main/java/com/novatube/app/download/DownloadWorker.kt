@@ -57,8 +57,8 @@ class DownloadWorker(
                 listener = object : DownloadManager.ProgressListener {
                     override fun onProgress(line: DownloadManager.ProgressEvent) {
                         val percent = line.percent.toInt().coerceIn(0, 100)
-                        // التصحيح: استخدام withContext لتشغيل دوال معلقة
-                        runBlockingInWorker {
+                        // التصحيح النهائي: استخدام withContext لتشغيل دوال معلقة
+                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                             app.downloadRepository.updateProgress(id, percent, line.downloadedBytes)
                             setProgress(
                                 workDataOf(
@@ -96,13 +96,6 @@ class DownloadWorker(
             app.downloadRepository.markFailed(id, msg)
             DownloadService.broadcastFailed(applicationContext, id, entity.title, msg)
             Result.failure(workDataOf("error" to msg))
-        }
-    }
-
-    // دالة مساعدة لتشغيل كود معلق داخل الـ listener
-    private suspend fun runBlockingInWorker(block: suspend () -> Unit) {
-        withContext(Dispatchers.IO) {
-            block()
         }
     }
 
