@@ -8,7 +8,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -17,11 +17,8 @@ import com.novatube.app.data.prefs.PreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
-/**
- * Lightweight wrapper around ExoPlayer with state flows for the UI layer.
- * One instance per player screen.
- */
 class VideoPlayerHolder(
     private val context: Context,
     private val okHttpClient: OkHttpClient,
@@ -35,11 +32,15 @@ class VideoPlayerHolder(
         parameters = buildUponParameters().setForceLowestBitrate(false).build()
     }
 
-    private val httpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
-        .setUserAgent("Mozilla/5.0 (Linux; Android 14) NovaTube/1.0")
-        .setAllowCrossProtocolRedirects(true)
-
-    private val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+    // استخدم DefaultHttpDataSource بدلاً من OkHttpDataSource لتجنب مشكلة setAllowCrossProtocolRedirects
+    private val dataSourceFactory = DefaultDataSource.Factory(
+        context,
+        DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14) NovaTube/1.0")
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(60_000)
+            .setAllowCrossProtocolRedirects(true)
+    )
 
     private val mediaSourceFactory = DefaultMediaSourceFactory(context)
         .setDataSourceFactory(dataSourceFactory)
