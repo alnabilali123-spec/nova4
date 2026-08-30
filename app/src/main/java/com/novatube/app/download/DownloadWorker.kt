@@ -19,11 +19,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
-/**
- * Owns a single download run. Receives a [com.novatube.app.data.entity.DownloadEntity] id
- * via input data, loads it from Room, delegates to [DownloadManager] for the actual
- * yt-dlp call, and keeps Room + notification state in sync.
- */
 class DownloadWorker(
     appContext: Context,
     params: WorkerParameters
@@ -60,10 +55,8 @@ class DownloadWorker(
                 listener = object : DownloadManager.ProgressListener {
                     override fun onProgress(line: DownloadManager.ProgressEvent) {
                         val percent = line.percent.toInt().coerceIn(0, 100)
-                        // The listener is invoked on the IO thread of DownloadManager, so we
-                        // can safely call the suspending DAO directly (runBlocking would also
-                        // work, but launching a coroutine is cleaner).
-                        kotlinx.coroutines.runBlocking {
+                        // التصحيح: استخدام GlobalScope.launch بدلاً من runBlocking
+                        kotlinx.coroutines.GlobalScope.launch {
                             app.downloadRepository.updateProgress(id, percent, line.downloadedBytes)
                         }
                         setProgress(
@@ -97,9 +90,7 @@ class DownloadWorker(
             setProgress(workDataOf(KEY_PROGRESS to 100, KEY_TOTAL to size, KEY_BYTES to size))
             Result.success(workDataOf("path" to file.absolutePath, "size" to size))
         } else {
-            val msg = if (isStopped) "Cancelled" else if (!app.ytDlpEngine.initialized)
-                "yt-dlp engine not initialised: ${app.ytDlpEngine.lastError ?: "unknown error"}"
-            else "Timed out"
+            val msg = if (isStopped) "Cancelled" else "Timed out"
             app.downloadRepository.markFailed(id, msg)
             DownloadService.broadcastFailed(applicationContext, id, entity.title, msg)
             Result.failure(workDataOf("error" to msg))
