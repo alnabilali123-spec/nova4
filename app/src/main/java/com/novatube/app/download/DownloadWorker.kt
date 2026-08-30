@@ -16,6 +16,8 @@ import com.novatube.app.data.model.RequestedDownload
 import com.novatube.app.service.DownloadService
 import com.novatube.app.util.NotificationHelper
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -55,20 +57,20 @@ class DownloadWorker(
                 listener = object : DownloadManager.ProgressListener {
                     override fun onProgress(line: DownloadManager.ProgressEvent) {
                         val percent = line.percent.toInt().coerceIn(0, 100)
-                        // التصحيح: استخدام GlobalScope.launch بدلاً من runBlocking
-                        kotlinx.coroutines.GlobalScope.launch {
+                        // التصحيح: استخدام withContext لتشغيل دوال معلقة
+                        runBlockingInWorker {
                             app.downloadRepository.updateProgress(id, percent, line.downloadedBytes)
-                        }
-                        setProgress(
-                            workDataOf(
-                                KEY_PROGRESS to percent,
-                                KEY_BYTES to line.downloadedBytes,
-                                KEY_TOTAL to line.totalBytes,
-                                KEY_SPEED to line.speed
+                            setProgress(
+                                workDataOf(
+                                    KEY_PROGRESS to percent,
+                                    KEY_BYTES to line.downloadedBytes,
+                                    KEY_TOTAL to line.totalBytes,
+                                    KEY_SPEED to line.speed
+                                )
                             )
-                        )
-                        setForeground(createForegroundInfo(entity.title, percent))
-                        DownloadService.broadcastProgress(applicationContext, id, percent, entity.title)
+                            setForeground(createForegroundInfo(entity.title, percent))
+                            DownloadService.broadcastProgress(applicationContext, id, percent, entity.title)
+                        }
                     }
                     override fun onCompleted(file: File) {
                         completedSignal.complete(file)
@@ -94,6 +96,13 @@ class DownloadWorker(
             app.downloadRepository.markFailed(id, msg)
             DownloadService.broadcastFailed(applicationContext, id, entity.title, msg)
             Result.failure(workDataOf("error" to msg))
+        }
+    }
+
+    // دالة مساعدة لتشغيل كود معلق داخل الـ listener
+    private suspend fun runBlockingInWorker(block: suspend () -> Unit) {
+        withContext(Dispatchers.IO) {
+            block()
         }
     }
 
